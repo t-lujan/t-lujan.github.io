@@ -102,7 +102,7 @@
     const S = { l: 0, r: 0 };
     const P = { l: { y: 0, t: 0 }, r: { y: 0, t: 0 } };
     const ball = { x: 0, y: 0, vx: 0, vy: 0, r: 7 };
-    let trail = [], sparks = [], userUntil = 0, keys = { w: 0, s: 0 }, pH = 120, pW = 10, inset = 28, base = 520, serveAt = 0;
+    let playing = false, trail = [], sparks = [], userUntil = 0, keys = { w: 0, s: 0 }, pH = 120, pW = 10, inset = 28, base = 520, serveAt = 0;
 
     function refreshColors() {
       const cs = getComputedStyle(doc);
@@ -112,7 +112,9 @@
     function size() {
       const r = hero.getBoundingClientRect(); dpr = Math.min(devicePixelRatio || 1, 2);
       W = r.width; H = r.height; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      pH = Math.max(70, Math.min(140, H * 0.15)); pW = W < 600 ? 7 : 10; inset = W < 600 ? 14 : 30;
+      const small = W < 600;
+      pH = small ? Math.max(96, Math.min(150, H * 0.17)) : Math.max(70, Math.min(140, H * 0.15));
+      pW = small ? 9 : 10; inset = small ? 14 : 30;
       base = Math.max(320, Math.min(640, W * 0.42)); ball.r = W < 600 ? 5 : 7;
       if (!ball.vx) serve(Math.random() < 0.5 ? 1 : -1, true);
       P.l.y = Math.min(Math.max(P.l.y || H / 2, pH / 2), H - pH / 2); P.r.y = Math.min(Math.max(P.r.y || H / 2, pH / 2), H - pH / 2);
@@ -137,6 +139,7 @@
       const now = performance.now(), user = now < userUntil;
       // left paddle
       if (keys.w || keys.s) { P.l.y += (keys.s - keys.w) * 640 * dt; userUntil = now + 4000; }
+      else if (playing) P.l.y += (P.l.t - P.l.y) * Math.min(1, dt * 28);
       else if (user) P.l.y += (P.l.t - P.l.y) * Math.min(1, dt * 18);
       else ai(P.l, true, dt);
       ai(P.r, false, dt);
@@ -181,16 +184,47 @@
       const dt = Math.min(0.033, (t - (last || t)) / 1000); last = t;
       step(dt); draw(); requestAnimationFrame(loop);
     }
-    function start() { if (running || reduce || !visible || document.hidden) return; running = true; last = 0; requestAnimationFrame(loop); }
+    function start() { if (running || (reduce && !playing) || !visible || document.hidden) return; running = true; last = 0; requestAnimationFrame(loop); }
     function stop() { running = false; }
     const engage = (y) => { P.l.t = y; userUntil = performance.now() + 4000; hint.classList.add('gone'); };
-    hero.addEventListener('pointermove', (e) => { const r = cv.getBoundingClientRect(); engage(e.clientY - r.top); });
-    hero.addEventListener('pointerdown', (e) => { const r = cv.getBoundingClientRect(); engage(e.clientY - r.top); });
+    // Mouse / pen: hover anywhere on the court (desktop behaviour unchanged). Touch outside play mode is ignored so the page scrolls.
+    const relY = (e) => e.clientY - cv.getBoundingClientRect().top;
+    hero.addEventListener('pointermove', (e) => { if (e.pointerType !== 'touch') engage(relY(e)); });
+    hero.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') engage(relY(e)); });
+
+    // Touch play mode: tap "Tap to play" -> the whole court captures touch, the paddle follows the finger's height.
+    const layer = $('.play-layer', hero), btn = $('.play-btn', hero), tip = $('.play-tip', hero), txt = $('.play-txt', hero);
+    let activeId = null;
+    const setPlaying = (on) => {
+      if (on === playing) return;
+      playing = on; hero.classList.toggle('playing', on); doc.classList.toggle('pong-playing', on);
+      btn.setAttribute('aria-pressed', String(on)); txt.textContent = on ? 'Done' : 'Tap to play';
+      $('.play-ico', hero).textContent = on ? '✕' : '▶';
+      if (on) {
+        tip.classList.remove('gone'); P.l.t = P.l.y; userUntil = Infinity;
+        const top = hero.getBoundingClientRect().top + scrollY;
+        if (Math.abs(scrollY - top) > 2) scrollTo({ top, behavior: reduce ? 'auto' : 'smooth' });
+        start();
+      } else { activeId = null; userUntil = 0; if (reduce) stop(); }
+    };
+    btn.addEventListener('click', () => setPlaying(!playing));
+    layer.addEventListener('pointerdown', (e) => {
+      if (!playing) return;
+      e.preventDefault(); activeId = e.pointerId;
+      try { layer.setPointerCapture(e.pointerId); } catch (_) {}
+      P.l.t = relY(e); tip.classList.add('gone');
+    });
+    layer.addEventListener('pointermove', (e) => { if (playing && e.pointerId === activeId) { e.preventDefault(); P.l.t = relY(e); } });
+    const release = (e) => { if (e.pointerId === activeId) activeId = null; };
+    layer.addEventListener('pointerup', release); layer.addEventListener('pointercancel', release);
+    // iOS Safari belt-and-braces: never let a touch on the play surface scroll or zoom the page.
+    ['touchstart', 'touchmove'].forEach((t) => layer.addEventListener(t, (e) => { if (playing) e.preventDefault(); }, { passive: false }));
+    addEventListener('keydown', (e) => { if (e.key === 'Escape' && playing) setPlaying(false); });
     addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase(); if ((k === 'w' || k === 's') && !e.target.closest('input,textarea') && visible) { keys[k] = 1; hint.classList.add('gone'); }
     });
     addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (k === 'w' || k === 's') keys[k] = 0; });
-    new IntersectionObserver(([e]) => { visible = e.isIntersecting; visible ? start() : stop(); }).observe(hero);
+    new IntersectionObserver(([e]) => { visible = e.isIntersecting; if (!visible) setPlaying(false); visible ? start() : stop(); }).observe(hero);
     document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
     new ResizeObserver(size).observe(hero);
     refreshColors(); size(); start();
