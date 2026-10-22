@@ -24,7 +24,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:ital,wght@0,400..900;1,400..900&family=JetBrains+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261021d">
   <script>
     (function(){try{var t=localStorage.getItem('theme');if(t==='light'){document.documentElement.classList.remove('dark');document.documentElement.classList.add('light');}}catch(e){}})();
   </script>
@@ -76,8 +76,8 @@
       </div>
 
       <div class="play-layer" aria-hidden="true"></div>
-      <button class="play-btn mono" type="button" aria-pressed="false"><span class="play-ico" aria-hidden="true">▶</span><span class="play-txt">Tap to play</span></button>
-      <p class="play-tip mono" aria-hidden="true">Slide anywhere to move your paddle</p>
+      <button class="play-btn mono" type="button" aria-pressed="false" hidden><span class="play-ico" aria-hidden="true">▶</span><span class="play-txt">Tap to play</span></button>
+      <p class="play-tip mono" aria-hidden="true" hidden>Slide anywhere to move your paddle</p>
       <p class="hint mono" aria-hidden="true"><span class="key">W</span><span class="key">S</span> or hover the court to play</p>
       <a class="scroll-cue mono" href="#projects" aria-label="Scroll to projects"><span>Scroll</span><i aria-hidden="true"></i></a>
     </section>
@@ -293,6 +293,6 @@
   </footer>
 
   <div class="toast mono" role="status" aria-live="polite"></div>
-  <script src="main.js" defer></script>
+  <script src="main.js?v=20261021d" defer></script>
 </body>
 </html>

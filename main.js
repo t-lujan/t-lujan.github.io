@@ -194,12 +194,15 @@
 
     // Touch play mode: tap "Tap to play" -> the whole court captures touch, the paddle follows the finger's height.
     const layer = $('.play-layer', hero), btn = $('.play-btn', hero), tip = $('.play-tip', hero), txt = $('.play-txt', hero);
-    let activeId = null;
+    const isTouch = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
+    if (isTouch) { doc.classList.add('touch'); btn.hidden = false; }
+    let activeId = null, lastToggle = 0;
     const setPlaying = (on) => {
       if (on === playing) return;
       playing = on; hero.classList.toggle('playing', on); doc.classList.toggle('pong-playing', on);
       btn.setAttribute('aria-pressed', String(on)); txt.textContent = on ? 'Done' : 'Tap to play';
       $('.play-ico', hero).textContent = on ? '✕' : '▶';
+      tip.hidden = !on;
       if (on) {
         tip.classList.remove('gone'); P.l.t = P.l.y; userUntil = Infinity;
         const top = hero.getBoundingClientRect().top + scrollY;
@@ -207,9 +210,12 @@
         start();
       } else { activeId = null; userUntil = 0; if (reduce) stop(); }
     };
-    btn.addEventListener('click', () => setPlaying(!playing));
+    // Toggle on pointerup (fast, reliable on iOS) and on click (keyboard / fallback); ignore the click that follows a pointerup.
+    const toggle = () => { const now = performance.now(); if (now - lastToggle < 450) return; lastToggle = now; setPlaying(!playing); };
+    btn.addEventListener('pointerup', (e) => { if (e.pointerType !== 'mouse') toggle(); });
+    btn.addEventListener('click', toggle);
     layer.addEventListener('pointerdown', (e) => {
-      if (!playing) return;
+      if (!playing || e.target.closest('.play-btn')) return;
       e.preventDefault(); activeId = e.pointerId;
       try { layer.setPointerCapture(e.pointerId); } catch (_) {}
       P.l.t = relY(e); tip.classList.add('gone');
@@ -217,8 +223,14 @@
     layer.addEventListener('pointermove', (e) => { if (playing && e.pointerId === activeId) { e.preventDefault(); P.l.t = relY(e); } });
     const release = (e) => { if (e.pointerId === activeId) activeId = null; };
     layer.addEventListener('pointerup', release); layer.addEventListener('pointercancel', release);
-    // iOS Safari belt-and-braces: never let a touch on the play surface scroll or zoom the page.
-    ['touchstart', 'touchmove'].forEach((t) => layer.addEventListener(t, (e) => { if (playing) e.preventDefault(); }, { passive: false }));
+    // iOS Safari: block scroll/zoom only for touches on the play surface while playing, and track the finger
+    // with touch events too (older iOS or in-app browsers that deliver pointer events late).
+    const touchY = (e) => { const t = e.touches[0] || e.changedTouches[0]; return t ? t.clientY - cv.getBoundingClientRect().top : null; };
+    ['touchstart', 'touchmove'].forEach((type) => layer.addEventListener(type, (e) => {
+      if (!playing || e.target.closest('.play-btn')) return;
+      e.preventDefault();
+      const y = touchY(e); if (y != null) { P.l.t = y; tip.classList.add('gone'); }
+    }, { passive: false }));
     addEventListener('keydown', (e) => { if (e.key === 'Escape' && playing) setPlaying(false); });
     addEventListener('keydown', (e) => {
       const k = e.key.toLowerCase(); if ((k === 'w' || k === 's') && !e.target.closest('input,textarea') && visible) { keys[k] = 1; hint.classList.add('gone'); }
