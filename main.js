@@ -120,6 +120,76 @@
       P.l.y = Math.min(Math.max(P.l.y || H / 2, pH / 2), H - pH / 2); P.r.y = Math.min(Math.max(P.r.y || H / 2, pH / 2), H - pH / 2);
       if (!running) draw();
     }
+    /* ---- match + easter egg: first to 5 while a human is playing wins confetti ---- */
+    const WIN = 5;
+    let matchLive = false, lastHuman = -1e9, celebrating = false;
+    const humanNow = () => playing || keys.w || keys.s || performance.now() < userUntil;
+    const showScore = () => { scoreEls.l.textContent = S.l; scoreEls.r.textContent = S.r; };
+    const resetScore = () => { S.l = 0; S.r = 0; showScore(); };
+    // Called whenever a human takes the paddle: a fresh match starts at 0:0 (attract-mode points never count).
+    function humanTouch() {
+      const now = performance.now();
+      if (!matchLive || now - lastHuman > 15000) { matchLive = true; resetScore(); }
+      lastHuman = now;
+    }
+    function point(side) {
+      if (celebrating) return;
+      const human = humanNow();
+      if (matchLive && !human && performance.now() - lastHuman > 15000) { matchLive = false; resetScore(); }
+      if (matchLive && !human) return;            // human stepped away mid-match: freeze the score
+      S[side]++; showScore();
+      if (matchLive && side === 'l' && S.l >= WIN) celebrate();
+      else if (S.r >= WIN || S.l >= WIN) resetScore(); // computer won (or attract mode hit 5): reset quietly
+    }
+    function celebrate() {
+      celebrating = true; serveAt = Infinity;
+      const done = () => {
+        celebrating = false; matchLive = false; userUntil = 0; keys.w = keys.s = 0; P.l.t = P.l.y;
+        if (playing) setPlaying(false);
+        resetScore(); serve(Math.random() < 0.5 ? 1 : -1);
+      };
+      tip.classList.add('gone'); trail = [];
+      if (!reduce) say('You win.');
+      if (reduce) flourish(done); else confetti(done);
+    }
+    function confetti(done) {
+      const c = document.createElement('canvas'); c.className = 'confetti'; c.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(c);
+      const g = c.getContext('2d'), d = Math.min(devicePixelRatio || 1, 2);
+      const vw = document.documentElement.clientWidth, vh = innerHeight;
+      c.width = vw * d; c.height = vh * d; g.scale(d, d);
+      const colors = ['#28283F', '#FFFFFF', '#E1F5F3', '#B8E6E6', '#2C6A8C'];
+      const n = Math.round(Math.min(220, Math.max(90, vw * 0.16)));
+      const bits = Array.from({ length: n }, () => ({
+        x: Math.random() * vw, y: -20 - Math.random() * vh * 0.6, w: 6 + Math.random() * 7, h: 8 + Math.random() * 10,
+        vy: 140 + Math.random() * 220, vx: -40 + Math.random() * 80, rot: Math.random() * 6.3, vr: -6 + Math.random() * 12,
+        sway: Math.random() * 6.3, sw: 1.5 + Math.random() * 2.5, c: colors[(Math.random() * colors.length) | 0], round: Math.random() < 0.25
+      }));
+      const DUR = 3000, t0 = performance.now(); let prev = t0;
+      const frame = (t) => {
+        const el = t - t0, dt = Math.min(0.05, (t - prev) / 1000); prev = t;
+        g.clearRect(0, 0, vw, vh);
+        g.globalAlpha = el > DUR - 700 ? Math.max(0, (DUR - el) / 700) : 1;
+        for (const b of bits) {
+          b.vy += 60 * dt; b.y += b.vy * dt; b.sway += b.sw * dt; b.x += (b.vx + Math.sin(b.sway) * 60) * dt; b.rot += b.vr * dt;
+          if (b.y > vh + 30) continue;
+          g.save(); g.translate(b.x, b.y); g.rotate(b.rot); g.fillStyle = b.c;
+          if (b.c === '#28283F') { g.strokeStyle = 'rgba(184,230,230,.55)'; g.lineWidth = 1; }
+          if (b.round) { g.beginPath(); g.arc(0, 0, b.w / 2, 0, 7); g.fill(); }
+          else { const sx = Math.abs(Math.cos(b.rot * 1.3)) * b.w + 1; g.fillRect(-sx / 2, -b.h / 2, sx, b.h); if (b.c === '#28283F') g.strokeRect(-sx / 2, -b.h / 2, sx, b.h); }
+          g.restore();
+        }
+        if (el < DUR) requestAnimationFrame(frame); else { c.remove(); done(); }
+      };
+      requestAnimationFrame(frame);
+    }
+    function flourish(done) {
+      const f = document.createElement('div'); f.className = 'win-flourish mono'; f.setAttribute('aria-hidden', 'true');
+      f.innerHTML = '<span>✦</span> You win. <span>✦</span>';
+      document.body.appendChild(f);
+      setTimeout(() => { f.remove(); done(); }, 2000);
+    }
+
     function serve(dir, now) {
       ball.x = W / 2; ball.y = H * (0.3 + Math.random() * 0.4);
       const a = (Math.random() * 0.7 - 0.35);
@@ -159,8 +229,8 @@
       const lx = inset + pW + ball.r, rx = W - inset - pW - ball.r;
       if (ball.vx < 0 && ball.x <= lx && ball.x > lx - 24) hit(P.l, lx, 1);
       if (ball.vx > 0 && ball.x >= rx && ball.x < rx + 24) hit(P.r, rx, -1);
-      if (ball.x < -40) { S.r++; scoreEls.r.textContent = S.r; burst(0, ball.y, 30, col.fg); serve(1); }
-      if (ball.x > W + 40) { S.l++; scoreEls.l.textContent = S.l; burst(W, ball.y, 30, col.acc); serve(-1); }
+      if (ball.x < -40) { burst(0, ball.y, 30, col.fg); point('r'); serve(1); }
+      if (ball.x > W + 40) { burst(W, ball.y, 30, col.acc); point('l'); serve(-1); }
       trail.push({ x: ball.x, y: ball.y }); if (trail.length > 18) trail.shift();
       sparks = sparks.filter((s) => (s.life -= dt * 1.6) > 0);
       sparks.forEach((s) => { s.x += s.vx * dt; s.y += s.vy * dt; s.vx *= 0.96; s.vy *= 0.96; });
@@ -170,14 +240,15 @@
       ctx.clearRect(0, 0, W, H);
       ctx.strokeStyle = col.line; ctx.lineWidth = 1; ctx.setLineDash([6, 14]);
       ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke(); ctx.setLineDash([]);
-      trail.forEach((t, i) => { const k = i / trail.length; ctx.globalAlpha = k * 0.35; ctx.fillStyle = col.fg; ctx.beginPath(); ctx.arc(t.x, t.y, ball.r * k, 0, 7); ctx.fill(); });
+      if (!celebrating) trail.forEach((t, i) => { const k = i / trail.length; ctx.globalAlpha = k * 0.35; ctx.fillStyle = col.fg; ctx.beginPath(); ctx.arc(t.x, t.y, ball.r * k, 0, 7); ctx.fill(); });
       sparks.forEach((s) => { ctx.globalAlpha = s.life; ctx.fillStyle = s.c; ctx.fillRect(s.x, s.y, 2.5, 2.5); });
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 24; ctx.shadowColor = col.acc; ctx.fillStyle = col.acc;
       rr(inset, P.l.y - pH / 2, pW, pH, pW / 2);
       ctx.shadowColor = col.fg; ctx.fillStyle = col.fg; ctx.shadowBlur = 16;
       rr(W - inset - pW, P.r.y - pH / 2, pW, pH, pW / 2);
-      ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
+      if (!celebrating) { ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r, 0, 7); ctx.fill(); }
+      ctx.shadowBlur = 0;
     }
     function loop(t) {
       if (!running) return;
@@ -186,7 +257,7 @@
     }
     function start() { if (running || (reduce && !playing) || !visible || document.hidden) return; running = true; last = 0; requestAnimationFrame(loop); }
     function stop() { running = false; }
-    const engage = (y) => { P.l.t = y; userUntil = performance.now() + 4000; hint.classList.add('gone'); };
+    const engage = (y) => { if (celebrating) return; humanTouch(); P.l.t = y; userUntil = performance.now() + 4000; hint.classList.add('gone'); };
     // Mouse / pen: hover anywhere on the court (desktop behaviour unchanged). Touch outside play mode is ignored so the page scrolls.
     const relY = (e) => e.clientY - cv.getBoundingClientRect().top;
     hero.addEventListener('pointermove', (e) => { if (e.pointerType !== 'touch') engage(relY(e)); });
@@ -204,7 +275,7 @@
       $('.play-ico', hero).textContent = on ? '✕' : '▶';
       tip.hidden = !on;
       if (on) {
-        tip.classList.remove('gone'); P.l.t = P.l.y; userUntil = Infinity;
+        tip.classList.remove('gone'); P.l.t = P.l.y; userUntil = Infinity; matchLive = false; humanTouch();
         const top = hero.getBoundingClientRect().top + scrollY;
         if (Math.abs(scrollY - top) > 2) scrollTo({ top, behavior: reduce ? 'auto' : 'smooth' });
         start();
@@ -218,7 +289,7 @@
       if (!playing || e.target.closest('.play-btn')) return;
       e.preventDefault(); activeId = e.pointerId;
       try { layer.setPointerCapture(e.pointerId); } catch (_) {}
-      P.l.t = relY(e); tip.classList.add('gone');
+      P.l.t = relY(e); tip.classList.add('gone'); lastHuman = performance.now();
     });
     layer.addEventListener('pointermove', (e) => { if (playing && e.pointerId === activeId) { e.preventDefault(); P.l.t = relY(e); } });
     const release = (e) => { if (e.pointerId === activeId) activeId = null; };
@@ -233,13 +304,14 @@
     }, { passive: false }));
     addEventListener('keydown', (e) => { if (e.key === 'Escape' && playing) setPlaying(false); });
     addEventListener('keydown', (e) => {
-      const k = e.key.toLowerCase(); if ((k === 'w' || k === 's') && !e.target.closest('input,textarea') && visible) { keys[k] = 1; hint.classList.add('gone'); }
+      const k = e.key.toLowerCase(); if ((k === 'w' || k === 's') && !e.target.closest('input,textarea') && visible) { if (!celebrating) { humanTouch(); keys[k] = 1; } hint.classList.add('gone'); }
     });
     addEventListener('keyup', (e) => { const k = e.key.toLowerCase(); if (k === 'w' || k === 's') keys[k] = 0; });
     new IntersectionObserver(([e]) => { visible = e.isIntersecting; if (!visible) setPlaying(false); visible ? start() : stop(); }).observe(hero);
     document.addEventListener('visibilitychange', () => (document.hidden ? stop() : start()));
     new ResizeObserver(size).observe(hero);
     refreshColors(); size(); start();
+    if (/[?&]pongtest\b/.test(location.search)) window.__pong = { point, score: () => ({ ...S }), human: humanNow, playing: () => playing, celebrating: () => celebrating, engage: () => engage(H / 2) };
     return { refreshColors };
   })();
 })();

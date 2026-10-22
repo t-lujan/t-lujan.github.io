@@ -191,9 +191,12 @@ h2{font-size:clamp(3rem,8vw,6.5rem);line-height:.92;letter-spacing:-.045em;font-
 /* FOOTER */
 .footer{width:calc(100% - 2*var(--pad));max-width:calc(var(--max) - 2*var(--pad));margin:0 auto;padding:2rem 0 3rem;display:flex;justify-content:space-between;flex-wrap:wrap;gap:1rem;font-size:.75rem;color:var(--subtle);border-top:1px solid var(--line)}
 .footer a:hover{color:var(--accent)}
-.toast{position:fixed;left:50%;bottom:1.5rem;transform:translate(-50%,150%);background:var(--fg);color:var(--bg);padding:.7rem 1.1rem;border-radius:999px;font-size:.8rem;z-index:120;opacity:0;visibility:hidden;transition:transform .45s var(--ease),opacity .3s,visibility .3s}
+.toast{white-space:nowrap;position:fixed;left:50%;bottom:1.5rem;transform:translate(-50%,150%);background:var(--fg);color:var(--bg);padding:.7rem 1.1rem;border-radius:999px;font-size:.8rem;z-index:120;opacity:0;visibility:hidden;transition:transform .45s var(--ease),opacity .3s,visibility .3s}
 .toast.show{transform:translate(-50%,0);opacity:1;visibility:visible}
 
+.confetti{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:110;display:block}
+.win-flourish{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:110;pointer-events:none;white-space:nowrap;padding:1rem 1.6rem;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-size:1.1rem;letter-spacing:.08em;box-shadow:0 20px 60px -20px var(--shadow)}
+.win-flourish span{color:var(--accent-ink);opacity:.7}
 /* REVEAL */
 .js .reveal{opacity:0;transform:translateY(28px);transition:opacity .9s var(--ease),transform .9s var(--ease);transition-delay:var(--d,0s)}
 .js .reveal.in{opacity:1;transform:none}
@@ -246,7 +249,7 @@ h2{font-size:clamp(3rem,8vw,6.5rem);line-height:.92;letter-spacing:-.045em;font-
 .play-tip{position:fixed;z-index:70;left:50%;transform:translateX(-50%);bottom:calc(max(1rem,env(safe-area-inset-bottom)) + 4.4rem);padding:.35rem .8rem;border-radius:999px;background:color-mix(in oklab,var(--bg) 75%,transparent);margin:0;width:max-content;max-width:calc(100vw - 2rem);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;font:400 .72rem/1.4 var(--mono);color:var(--muted);pointer-events:none;transition:opacity .35s}
 .play-tip.gone{opacity:0}
 @media (prefers-reduced-motion:reduce){
-  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition:none!important;scroll-behavior:auto!important}
   .hero-title .word{transform:none}
   .js .reveal{opacity:1;transform:none}
 }
